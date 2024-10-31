@@ -1,0 +1,47 @@
+version: "3.8"
+services:
+  localstack:
+    container_name: localstack
+    image: localstack/localstack:latest
+    ports:
+      - "127.0.0.1:4566:4566" # LocalStack Gateway
+      - "127.0.0.1:4510-4559:4510-4559" # external services port range
+      - "127.0.0.1:443:443" # LocalStack HTTPS Gateway (only required for Pro)
+    environment:
+      DEBUG: 1
+      LS_LOG: "error"
+      ENVIRONMENT: "test"
+      DYNAMODB_SHARE_DB: 1
+      DYNAMODB_IN_MEMORY: 1
+      #SERVICES: lambda,dynamodb,cloudformation,secretsmanager
+      DOCKER_HOST: unix:///var/run/docker.sock
+      #TMPDIR: /tmp/localstack_tmp
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    #  - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+    env_file:
+      - .env.test
+    healthcheck:
+      test: [
+        "CMD",
+        "sh",
+        "-c",
+        "awslocal dynamodb list-tables && awslocal secretsmanager list-secrets"
+      ]
+      timeout: 60s
+      interval: 5s
+      retries: 15
+      
+  dynamodb-admin:
+    build:
+      context: .
+      dockerfile: ./dockerfiles/Dockerfile.dynamoadmin
+    environment:
+      DYNAMO_ENDPOINT: "http://localstack:4566"
+      DYNAMO_PORT: 4000
+    profiles: ["local"]
+    ports:
+      - 4000:4000
+    depends_on:
+      localstack:
+        condition: service_healthy
